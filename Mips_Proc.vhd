@@ -17,7 +17,7 @@ ENTITY Mips_Proc IS
 				sevD4, sevD5, sevD6, sevD7 
 								: OUT STD_LOGIC_VECTOR(6 DOWNTO 0); -- 7-segment digits 0-7
 				-- sram access
-				sram_addr	: OUT STD_LOGIC_VECTOR(19 DOWNTO 0);
+				sram_addr	: BUFFER STD_LOGIC_VECTOR(19 DOWNTO 0);
 				sram_dq		: INOUT STD_LOGIC_VECTOR(15 DOWNTO 0);
 				sram_we, sram_ce, sram_oe, sram_lb, sram_ub
 							: OUT STD_LOGIC);
@@ -27,7 +27,7 @@ END Mips_Proc;
 ARCHITECTURE behavior OF Mips_Proc IS
 -- signals & variables
 	-- these are for dealing with instruction memory 
-	SIGNAL	PC			: STD_LOGIC_VECTOR(19 DOWNTO 0); -- current SRAM address
+	SIGNAL	PC			: STD_LOGIC_VECTOR(19 DOWNTO 0); -- Program counter
 	SIGNAL 	address 	: STD_LOGIC_VECTOR(31 DOWNTO 0); -- for output to 7seg display
 	SIGNAL	instruction	: STD_LOGIC_VECTOR(31 DOWNTO 0); -- complete instruction input to 32-bit register
 	SIGNAL 	inst32		: STD_LOGIC_VECTOR(31 DOWNTO 0); -- complete instruction output from 32-bit register
@@ -66,7 +66,7 @@ ARCHITECTURE behavior OF Mips_Proc IS
 	-- used for storing contents of SRAM data used in SW/LW ops
 --	SIGNAL	data_low			:STD_LOGIC_VECTOR(15 DOWNTO 0);
 --	SIGNAL 	data_high		:STD_LOGIC_VECTOR(15 DOWNTO 0);
---	SIGNAL	data_SRAM		:STD_LOGIC_VECTOR(31 DOWNTO 0);
+	SIGNAL	data_SRAM		:STD_LOGIC_VECTOR(31 DOWNTO 0);
 	--
 --	SHARED VARIABLE 	up_down_data	:STD_LOGIC_VECTOR(2 DOWNTO 0);
 	-- These are for the processor component
@@ -132,17 +132,17 @@ ARCHITECTURE behavior OF Mips_Proc IS
 	sram_oe <= '0';
 	sram_lb <= '0';
 	sram_ub <= '0';
-	data_add_high(15 DOWNTO 8) <= x"FF";
-	output_1 <= sram_data;
+	--data_add_high(15 DOWNTO 8) <= x"FF";
+	output_1 <= sram_dq;
 	ledR(15 DOWNTO 0) <= output_1;
-	output_2 <= dMAd;	
+	--output_2 <= dMAd;	
 	address <= X"000" & sram_addr;
 	
 -- port map components
 	ck		: 	clock PORT MAP(clk_50, clk); -- system clock
-	inst	:	register32 PORT MAP(instruction(31 DOWNTO 0), '0','0','0',up_down_inst(2),'0','0', inst32(31 DOWNTO 0)); -- instruction register
+	inst	:	register32 PORT MAP(instruction(31 DOWNTO 0), '0','0','0','1','0','0', inst32(31 DOWNTO 0)); -- instruction register
 	proc	:	processor  PORT MAP(inst32(31 DOWNTO 0),dMDI(31 DOWNTO 0),dMDo(31 DOWNTO 0), -- processor
-							    	dMAd(31 DOWNTO 0),dMRd, dMWr, clk, regWrite); -- processor
+							    	dMAd(31 DOWNTO 0),dMRd, dMWr, clk, regEnable); -- processor
 	-- seven segment display
 	digit0 	: sev_seg_drv PORT MAP(displayVector(3 DOWNTO 0),sevD0);
 	digit1	: sev_seg_drv PORT MAP(displayVector(7 DOWNTO 4),sevD1);
@@ -153,11 +153,11 @@ ARCHITECTURE behavior OF Mips_Proc IS
 	digit6	: sev_seg_drv PORT MAP(displayVector(27 DOWNTO 24),sevD6);
 	digit7	: sev_seg_drv PORT MAP(displayVector(31 DOWNTO 28),sevD7);			
 									
---	sr							:	sram 	PORT MAP(address(31 DOWNTO 0), sram_addr(19 DOWNTO 0), sram_data(15 DOWNTO 0), instruction_half(15 DOWNTO 0),
---													sram_wein, sram_we, sram_ce, sram_oe, sram_lb, sram_ub);
-	-- instruction registers	
-	--instruction_lower		: 	register16 PORT MAP(output_1(15 DOWNTO 0),'0','0',up_down_inst(0),'0', instruction(15 DOWNTO 0));
-	--instruction_upper		: 	register16 PORT MAP(output_1(15 DOWNTO 0),'0','0',up_down_inst(1),'0', instruction(31 DOWNTO 16));
+--	sr		:	sram 	PORT MAP(address(31 DOWNTO 0), sram_addr(19 DOWNTO 0), sram_data(15 DOWNTO 0), instruction_half(15 DOWNTO 0),
+--								sram_wein, sram_we, sram_ce, sram_oe, sram_lb, sram_ub);
+-- instruction registers	
+--instruction_lower		: 	register16 PORT MAP(output_1(15 DOWNTO 0),'0','0',up_down_inst(0),'0', instruction(15 DOWNTO 0));
+--instruction_upper		: 	register16 PORT MAP(output_1(15 DOWNTO 0),'0','0',up_down_inst(1),'0', instruction(31 DOWNTO 16));
 	
 	-- processor data registers
 	--proc_lower				: 	register16 PORT MAP(output_1(15 DOWNTO 0),'0','0',up_down_data(0),'0', data_SRAM(15 DOWNTO 0));
@@ -171,7 +171,7 @@ WITH sw(17 DOWNTO 15) SELECT
 		 instruction WHEN "010",
 		 dMDo WHEN "011",
 		 dMAd WHEN "100",
-		 X"FFFF" & instruction_half WHEN "101",
+		 --X"FFFF" & instruction_half WHEN "101",
 		 X"FFFFFFFF" WHEN OTHERS;
 
 -- state machine
@@ -188,43 +188,42 @@ BEGIN
 		current_state <= s2;
 	WHEN s2=> -- push upper half of instruction to register, increment PC, enable processor register write		
 		instruction(31 DOWNTO 16) <= sram_dq;
-		PC = PC + 2;					
+		PC <= PC + 2;					
 		current_state <= s3;
 		regEnable <= '1';
 	WHEN s3=> -- are we doing LW or SW op?
-		dMRdTmp := dMRd;
-		dMWrTmp := dmWr;
 		IF (dMRdTmp = '1') THEN -- LW, read from SRAM
-			sram_addr <= dMAd;
+			sram_addr <= dMAd(19 DOWNTO 0);
 		END IF;
 		IF (dMWrTmp = '1') THEN -- SW, write to SRAM
 			sram_wein <= '1';
-			sram_addr <= dMAd;
+			sram_addr <= dMAd(19 DOWNTO 0);
 		END IF;
 		current_state <= s4;
 	WHEN s4=>
-		regWrite <= '0';
+		regEnable <= '0';
 		IF (dMRdTmp = '1') THEN -- read from SRAM
-			data_SRAM(15 DOWNTO 0) <= sram_data;
+			data_SRAM(15 DOWNTO 0) <= sram_dq;
 			sram_addr <= sram_addr + 1;
 		END IF;
 		IF (dMWrTmp = '1') THEN -- write to SRAM
-			sram_data <= dMDo(15 DOWNTO 0);
+			sram_dq <= dMDo(15 DOWNTO 0);
 			sram_addr <= sram_addr + 1;				
 		END IF;
 		current_state <= s5;
 	WHEN s5=>
 		IF (dMRdTmp = '1') THEN
-			data_SRAM(31 DOWNTO 16) <= sram_data;
+			data_SRAM(31 DOWNTO 16) <= sram_dq;
 		END IF;
 		IF (dMWrTmp = '1') THEN -- write to SRAM
-			sram_data <= dMDo(31 DOWNTO 16);
-			address <= instruction_next;
+			sram_dq <= dMDo(31 DOWNTO 16);
+			sram_addr <= PC;
 		END IF;
 		current_state <= s6;
 	WHEN s6=>
 		IF (dMRdTmp = '1') THEN
 			dMDi <= data_SRAM;
+			sram_addr <= PC;
 		END IF;	
 		current_state <= s0;
 	END CASE;
