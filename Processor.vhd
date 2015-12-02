@@ -21,8 +21,7 @@ ENTITY Processor IS
 				DataMemAddr 	: OUT STD_LOGIC_VECTOR (31 DOWNTO 0);
 				DataMemRead 	: OUT STD_LOGIC;
 				DataMemWrite 	: OUT STD_LOGIC;
-				clock 			: IN  STD_LOGIC;
-				WriteToReg		: IN 	STD_LOGIC);
+				clock 			: IN  STD_LOGIC);
 				
 END Processor;
 
@@ -155,15 +154,9 @@ BEGIN
 	-- Control: MemtoReg1 ['1' for LW op, '0' for others]
 	MZ: BusMux2to1 PORT MAP(MemtoReg1,tempMemAddr,DataMemdatain,intowriteD);
 
-	PROCESS (WriteToReg)
-	BEGIN
-	IF (WriteToReg = '1') THEN
 	DataMemAddr <= tempMemAddr;
 	DataMemWrite <= MemWrite1;
 	DataMemdataout <= rdata2;
 	DataMemRead <= MemRead1;
-	END IF;
-	END PROCESS;
-	--InstMemAddr
 	
 END holistic;
